@@ -27,8 +27,8 @@ names(LivestockVoP)<-Names
 
 # Load, mask, and resample smallholder data
 SmallHolders<-terra::rast(paste0(DataDir,"/atlas_smallholders/raw/farmSize_agarea_20210505_1.tif"))
-SmallHolders<-terra::mask(terra::crop(SmallHolders,sh_africa),sh_africa)
 SmallHolders<-terra::resample(SmallHolders,LivestockVoP,method="near")
+SmallHolders<-terra::mask(terra::crop(SmallHolders,sh_africa),sh_africa)
 
 # Create vector of smallholder values
 Values<-unique(terra::values(SmallHolders))
@@ -41,10 +41,18 @@ lapply(Values,FUN=function(VAL){
     SH[!is.na(SH)]<-1
     LSVop<-LivestockVoP*SH
     
+    cellsize_ha<-terra::cellSize(LSVop[[1]],unit="ha",mask=F)
+
+    LSVop<-LSVop/cellsize_ha
+    
+    names(LSVop)<-paste0(names(LSVop),"-USD_ha-sh",VAL)
+    
     lapply(names(LSVop),FUN=function(Layer){
-       supressWarnings(terra::writeRaster(LSVop[[Layer]],file=paste0(LivestockDirInt,"/",Layer,"-sh_",VAL,".tif")))        
+       suppressWarnings(terra::writeRaster(LSVop[[Layer]],file=paste0(LivestockDirInt,"/",Layer,".tif")))        
         })
     })
+
+terra::plot(terra::rast(list.files(LivestockDirInt,"total",full.names=T)[1:4]))
 
 # Add meta.data
 SizeClasses<-paste0(0,"-",Values)
