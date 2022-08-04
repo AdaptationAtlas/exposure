@@ -36,31 +36,38 @@ files_vop<-MS_metadata[Variable=="value of production" & Subvarible == "all tech
 files_ha<-MS_metadata[Variable=="havested area" & Subvarible == "all technologies"]
 
 # Load and mask vop & harvest area per crop group, divide vop by harvested area and sum the resulting stack
-crop_vop_ha<-terra::rast(lapply(1:length(crop_groups),FUN=function(i){
+crop_vop_ha<-lapply(1:length(crop_groups),FUN=function(i){
     print(names(crop_groups)[i])
     CROPS<-crop_groups[[i]]
     crop_vop<-terra::rast(paste0(CropDir,"/",files_vop[Commodity %in% CROPS,File]))
     crop_vop<-terra::mask(terra::crop(crop_vop,sh_africa),sh_africa)
     
     cellsize_ha<-terra::cellSize(crop_vop[[1]],unit="ha",mask=F)
-    #crop_ha<-terra::rast(paste0(CropDir,"/",files_ha[Commodity %in% CROPS,File]))
-    #crop_ha<-terra::mask(terra::crop(crop_ha,sh_africa),sh_africa)
+    
+    crop_ha<-terra::rast(paste0(CropDir,"/",files_ha[Commodity %in% CROPS,File]))
+    crop_ha<-terra::mask(terra::crop(crop_ha,sh_africa),sh_africa)
        
+    crop_vop_ha2<-crop_vop/crop_ha
+    crop_vop_ha2<-sum(crop_vop_ha2)
+    
     crop_vop<-sum(crop_vop)
-    
     crop_vop_ha<-crop_vop/cellsize_ha
-    
+       
     names(crop_vop_ha)<-paste0(names(crop_groups)[i],"-USD_ha")
+    names(crop_vop_ha2)<-paste0(names(crop_groups)[i],"-USD_ha")
     
-    crop_vop_ha
+    list(crop_vop_ha_cell=crop_vop_ha,crop_vop_ha_crop=crop_vop_ha2)
     
-    }))
+    })
+
+crop_vop_ha_cell<-terra::rast(lapply(crop_vop_ha,"[[","crop_vop_ha_cell"))
+crop_vop_ha_crop<-terra::rast(lapply(crop_vop_ha,"[[","crop_vop_ha_crop"))
 
 # Subset VoP for different smallholder farm sizes ####
 
 # Load, mask, and resample smallholder data
 SmallHolders<-terra::rast(paste0(DataDir,"/atlas_smallholders/raw/farmSize_agarea_20210505_1.tif"))
-SmallHolders<-terra::resample(SmallHolders,crop_vop_ha,method="near")
+SmallHolders<-terra::resample(SmallHolders,crop_vop_ha_cell,method="near")
 SmallHolders<-terra::mask(terra::crop(SmallHolders,sh_africa),sh_africa)
 
 # Create vector of smallholder values
@@ -72,10 +79,15 @@ lapply(Values,FUN=function(VAL){
     SH<-SmallHolders
     SH[SH>VAL]<-NA
     SH[!is.na(SH)]<-1
-    crop_vop_ha_sh<-crop_vop_ha*SH
-    names(crop_vop_ha_sh)<- paste0(names(crop_vop_ha_sh),"-sh",VAL)
-    lapply(names(crop_vop_ha_sh),FUN=function(Layer){
-       suppressWarnings(terra::writeRaster(crop_vop_ha_sh[[Layer]],file=paste0(CropDirInt,"/",Layer,".tif"),overwrite=T))        
+    crop_vop_ha_sh_cell<-crop_vop_ha_cell*SH
+    crop_vop_ha_sh_crop<-crop_vop_ha_crop*SH
+    
+    names(crop_vop_ha_sh_cell)<- paste0(names(crop_vop_ha_sh_cell),"-sh",VAL)
+    names(crop_vop_ha_sh_crop)<- paste0(names(crop_vop_ha_sh_crop),"-sh",VAL)
+    
+    lapply(names(crop_vop_ha_sh_cell),FUN=function(Layer){
+       suppressWarnings(terra::writeRaster(crop_vop_ha_sh_cell[[Layer]],file=paste0(CropDirInt,"/",Layer,"-cell.tif"),overwrite=T))        
+       suppressWarnings(terra::writeRaster(crop_vop_ha_sh_crop[[Layer]],file=paste0(CropDirInt,"/",Layer,"-crop.tif"),overwrite=T)) 
         })
     })
 
