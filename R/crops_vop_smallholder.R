@@ -48,8 +48,6 @@ crop_vop_ha<-lapply(1:length(crop_groups),FUN=function(i){
     crop_ha<-terra::mask(terra::crop(crop_ha,sh_africa),sh_africa)
       
     crop_vop_ha2<-sum(crop_vop)/sum(crop_ha)
-    #crop_vop_ha2<-crop_vop/crop_ha
-    #crop_vop_ha2<-sum(crop_vop_ha2)
     
     crop_vop<-sum(crop_vop)
     crop_vop_ha<-crop_vop/cellsize_ha
