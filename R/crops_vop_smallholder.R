@@ -23,9 +23,9 @@ MS_metadata<-data.table::fread(paste0(CropDir,"/mapspam_meta.csv"))
 
 # Create a list of crop groupings
 cereals<-c("barley","maize","other cereals","pearl millet","rice","small millet","sorghum","wheat")
-oil_crops<-c("oilpalm","other oil crops","rapeseed","sesameseed","sunflower")
+oil_crops<-c("oilpalm","other oil crops","rapeseed","sesameseed","sunflower","coconut")
 pulses<-c("bean","chickpea","cowpea","groundnut","lentil","other pulses","pigeonpea","soybean")
-roots<-c("cassava","other roots","plantain","potato","sweet potato","yams")
+roots<-c("cassava","other roots","potato","sweet potato","yams")
 total<-MS_metadata[,unique(Commodity)]
 
 crop_groups<-list(cereals=cereals,oil_crops=oil_crops,pulses=pulses,roots=roots,total=total)
@@ -46,9 +46,10 @@ crop_vop_ha<-lapply(1:length(crop_groups),FUN=function(i){
     
     crop_ha<-terra::rast(paste0(CropDir,"/",files_ha[Commodity %in% CROPS,File]))
     crop_ha<-terra::mask(terra::crop(crop_ha,sh_africa),sh_africa)
-       
-    crop_vop_ha2<-crop_vop/crop_ha
-    crop_vop_ha2<-sum(crop_vop_ha2)
+      
+    crop_vop_ha2<-sum(crop_vop)/sum(crop_ha)
+    #crop_vop_ha2<-crop_vop/crop_ha
+    #crop_vop_ha2<-sum(crop_vop_ha2)
     
     crop_vop<-sum(crop_vop)
     crop_vop_ha<-crop_vop/cellsize_ha
@@ -89,6 +90,7 @@ lapply(Values,FUN=function(VAL){
        suppressWarnings(terra::writeRaster(crop_vop_ha_sh_cell[[Layer]],file=paste0(CropDirInt,"/",Layer,"-cell.tif"),overwrite=T))        
        suppressWarnings(terra::writeRaster(crop_vop_ha_sh_crop[[Layer]],file=paste0(CropDirInt,"/",Layer,"-crop.tif"),overwrite=T)) 
         })
+    VAL
     })
 
 terra::plot(terra::rast(list.files(CropDirInt,"total",full.names=T)[1:2]))
