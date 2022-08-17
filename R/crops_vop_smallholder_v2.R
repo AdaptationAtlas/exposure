@@ -13,7 +13,7 @@ sh_africa<-terra::vect(paste0(DataDir,"/atlas_boundaries/intermediate/gadml0_432
 # Set directory for atlas IFPRI mapspam data by farm size
 IFPRIDir<-paste0(DataDir,"/atlas_mapspam/intermediate/GeoTIFF")
 
-IFPRIDirInt<-paste0(DataDir,"/atlas_mapspam/intermediate/VoP_USD_ha")
+IFPRIDirInt<-paste0(DataDir,"/atlas_mapspam/intermediate/VoP_IND_ha")
 if(!dir.exists(IFPRIDirInt)){
     dir.create(IFPRIDirInt,recursive=T)
     }
@@ -42,15 +42,13 @@ crop_vop_ha<-lapply(crop_groups,FUN=function(CROP){
         
         crop_vop_ha<-terra::crop(crop_vop_ha,sh_africa)
         
-        names(crop_vop_ha)<-paste0(CROP,"-",FS,"-USD_ha")
+        names(crop_vop_ha)<-paste0(CROP,"-",FS,"-IND_ha")
         
         suppressWarnings(terra::writeRaster(crop_vop_ha,file=paste0(IFPRIDirInt,"/spam_ssp_hv-",FS,"-cumulative-",CROP,"-A.tif"),overwrite=T))
         
         crop_vop_ha
-        }))
-    
-    names(X)<-Vop_Farmsizes
-    X
+        }))    
+   X
 })
 
 names(crop_vop_ha)<-crop_groups
