@@ -8,6 +8,9 @@ DataDir<-"/home/jovyan/common_data"
 # Read in boundary of subsaharan africa
 sh_africa<-terra::vect(paste0(DataDir,"/atlas_boundaries/intermediate/gadml0_4326_agg.shp"))
 
+# Read in waterbodies to create mask
+waterbodies<-terra::vect(paste0(DataDir,"/atlas_surfacewater/raw/waterbodies_africa.shp"))
+
 # Set directory for livestock data
 LivestockDir<-paste0(DataDir,"/livestock_vop/raw")
 # Set save directory for livestock x smallholder data
@@ -36,28 +39,33 @@ SmallHolders<-terra::mask(terra::crop(SmallHolders,sh_africa),sh_africa)
 Values<-unique(terra::values(SmallHolders))
 Values<-sort(Values[!is.na(Values)])
 
+# Work out pixel cell size
+cellsize_ha<-terra::cellSize(LivestockVoP[[1]],unit="ha",mask=F)
+
+# Create a higher resolution raster to work out area of waterbody per pixel
+cellsize_da<-terra::disagg(cellsize_ha,fact=10)
+water_rast<-terra::rasterize(waterbodies,cellsize_da)
+
+# Work out proportion of cell that is not water and multiply cellsize_ha by this value
+water_rast<-(100-terra::aggregate(water_rast,fact=10,fun=sum,na.rm=T))/100
+water_rast[is.na(water_rast)]<-1
+cellsize_ha<-cellsize_ha*water_rast
+
 # Create mask for each smallholder value, multiply LSVop stack by mask and save each layer
 
-# Agricultural land is not implemented as livestock can be produced in rangelands which contain zero agriculture
 lapply(Values,FUN=function(VAL){
     SH<-SmallHolders
     SH[SH>VAL]<-NA
     SH[!is.na(SH)]<-1
-    
-    cellsize_ha<-terra::cellSize(LivestockVoP[[1]],unit="ha",mask=F)
-    
+        
     ls_vop_ha_cell<-LivestockVoP/cellsize_ha
-   # ls_vop_ha_ag<-LivestockVoP/ag_land_area
     
     ls_vop_ha_sh_cell<-ls_vop_ha_cell*SH
-   # ls_vop_ha_sh_ag<-ls_vop_ha_ag*SH
     
-    names(ls_vop_ha_sh_cell)<- paste0(names(ls_vop_ha_sh_cell),"-USD_ha-sh",VAL)
-   # names(ls_vop_ha_sh_ag)<- paste0(names(ls_vop_ha_sh_ag),"-USD_ha-sh",VAL)
+    names(ls_vop_ha_sh_cell)<- paste0(names(ls_vop_ha_sh_cell),"-IND_ha-sh",VAL)
     
     lapply(names(ls_vop_ha_sh_cell),FUN=function(Layer){
         suppressWarnings(terra::writeRaster(ls_vop_ha_sh_cell[[Layer]],file=paste0(LivestockDirInt,"/",Layer,"-cell.tif"),overwrite=T))    
-       # suppressWarnings(terra::writeRaster(ls_vop_ha_sh_ag[[Layer]],file=paste0(LivestockDirInt,"/",Layer,"-agland.tif"),overwrite=T)) 
         })
     
     VAL
