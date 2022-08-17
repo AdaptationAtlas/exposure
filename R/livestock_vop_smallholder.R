@@ -27,27 +27,6 @@ Names<-paste0(Names1,"_",Names2)
 Names<-gsub("_NA","",gsub(" ","_",Names))
 names(LivestockVoP)<-Names
 
-# Load map of agricultural area
-ag_landDirInt<-paste0(DataDir,"/af_agri_land/intermediate/atlas")
-if(!dir.exists(ag_landDirInt)){
-    dir.create(ag_landDirInt)
-}
-
-# Load agricultural land dataset
-ag_land<-terra::rast(paste0(DataDir,"/af_agri_land/raw/MAL_AFRICA1.tif"))
-
-# Dataset is projected and resolution is 100x100m = 1 ha cells, so resampled summed layer will give ha/agriculture per grid cell of LivestockVoP
-ag_land_area<-terra::resample(ag_land,LivestockVoP,method="sum")
-
-# Load pasture land dataset
-pasture<-terra::rast(paste0(DataDir,"/pasture_ramankutty/raw/af_pasture.tif"))
-pasture_resamp<-terra::resample(pasture,LivestockVoP)
-pasture_area<-pasture_resamp*terra::cellSize(pasture_resamp,unit="ha")
-
-# Determine livestock VoP per ha agricultural land
-LivestockVoP_area<-LivestockVoP/pasture_area
-terra::plot(LivestockVoP_area$total)
-
 # Load, mask, and resample smallholder data
 SmallHolders<-terra::rast(paste0(DataDir,"/atlas_smallholders/raw/farmSize_agarea_20210505_1.tif"))
 SmallHolders<-terra::resample(SmallHolders,LivestockVoP,method="near")
