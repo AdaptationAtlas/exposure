@@ -6,22 +6,37 @@ require(terra)
 DataDir<-"/home/jovyan/common_data"
 
 # Read in boundary of subsaharan africa
-sh_africa<-terra::vect(paste0(DataDir,"/atlas_boundaries/intermediate/gadml0_4326_agg.shp"))
+adm1_africa<-terra::vect(paste0(DataDir,"/atlas_boundaries/intermediate/gadm41_ssa_1.shp"))
+
+# Read in a base raster
+base_raster<-terra::rast(paste0(DataDir,"/mapspam_2017/raw/spam2017V2r1_SSA_H_YAMS_S.tif"))
+base_raster<-terra::crop(base_raster,adm1_africa)
 
 # Read in waterbodies to create mask
 waterbodies<-terra::vect(paste0(DataDir,"/atlas_surfacewater/raw/waterbodies_africa.shp"))
 
+water_mask<-terra::rasterize(waterbodies,base_raster)
+water_mask[!is.na(water_mask)]<-0
+water_mask[is.na(water_mask)]<-1
+water_mask[water_mask==0]<-NA
+water_mask<-terra::mask(terra::crop(water_mask,adm1_africa),adm1_africa)
+
 # Set directory for livestock data
-LivestockDir<-paste0(DataDir,"/livestock_vop/raw")
+LivestockDir<-paste0(DataDir,"/atlas_livestock/raw")
 # Set save directory for livestock x smallholder data
-LivestockDirInt<-paste0(DataDir,"/livestock_vop/intermediate/atlas_smallholders")
-if(!dir.exists(LivestockDirInt)){
-    dir.create(LivestockDirInt,recursive=T)
+LivestockDirInt_cell<-paste0(DataDir,"/atlas_livestock/intermediate/vop_per_cell_ha")
+if(!dir.exists(LivestockDirInt_cell)){
+    dir.create(LivestockDirInt_cell,recursive=T)
+    }
+
+LivestockDirInt_total<-paste0(DataDir,"/atlas_livestock/intermediate/vop_total")
+if(!dir.exists(LivestockDirInt_total)){
+    dir.create(LivestockDirInt_total,recursive=T)
     }
 
 # Load & mask livestock data
 LivestockVoP<-terra::rast(list.files(LivestockDir,full.names=T))
-LivestockVoP<-terra::mask(terra::crop(LivestockVoP,sh_africa),sh_africa)
+LivestockVoP<-terra::mask(terra::crop(LivestockVoP,adm1_africa),adm1_africa)*water_mask
 
 # Rename livestock layers
 Names1<-unlist(data.table::tstrsplit(names(LivestockVoP),"_",keep=5))
@@ -29,15 +44,17 @@ Names2<-unlist(data.table::tstrsplit(names(LivestockVoP),"_",keep=6))
 Names<-paste0(Names1,"_",Names2)
 Names<-gsub("_NA","",gsub(" ","_",Names))
 names(LivestockVoP)<-Names
+LivestockVoP<-LivestockVoP[[c("cattle","chicken","sheep_goat","pig","total")]]
 
 # Load, mask, and resample smallholder data
 SmallHolders<-terra::rast(paste0(DataDir,"/atlas_smallholders/raw/farmSize_agarea_20210505_1.tif"))
-SmallHolders<-terra::resample(SmallHolders,LivestockVoP,method="near")
-SmallHolders<-terra::mask(terra::crop(SmallHolders,sh_africa),sh_africa)
+SmallHolders<-terra::project(SmallHolders,crs(base_raster))
+SmallHolders<-terra::mask(terra::crop(SmallHolders,adm1_africa),adm1_africa)
+SmallHolders<-terra::resample(SH_Tot,base_raster,method="near")
 
-# Create vector of smallholder values
-Values<-unique(terra::values(SmallHolders))
-Values<-sort(Values[!is.na(Values)])
+# Create vector of smallholder size classes
+Values<-c(1,2,5,10,20,999999999)
+names(Values)<-paste0("h",2:7)
 
 # Work out pixel cell size
 cellsize_ha<-terra::cellSize(LivestockVoP[[1]],unit="ha",mask=F)
@@ -53,20 +70,29 @@ cellsize_ha<-cellsize_ha*water_rast
 
 # Create mask for each smallholder value, multiply LSVop stack by mask and save each layer
 
-lapply(Values,FUN=function(VAL){
+LS<-lapply(1:length(Values),FUN=function(i){
+    VAL<-Values[i]
     SH<-SmallHolders
-    SH[SH>VAL]<-NA
+    SH[SH>VAL]<-0
     SH[!is.na(SH)]<-1
         
-    ls_vop_ha_cell<-LivestockVoP/cellsize_ha
+    LivestockVoP_SH<-LivestockVoP*SH
     
-    ls_vop_ha_sh_cell<-ls_vop_ha_cell*SH
+    ls_vop_ha_sh_cell<-LivestockVoP_SH/cellsize_ha
+       
+    names(ls_vop_ha_sh_cell)<- paste0(names(Values)[i],"-",names(ls_vop_ha_sh_cell),"-vop_per_cell_ha")
+    names(LivestockVoP_SH)<- paste0(names(Values)[i],"-",names(ls_vop_ha_sh_cell),"-vop_total")
     
-    names(ls_vop_ha_sh_cell)<- paste0(names(ls_vop_ha_sh_cell),"-IND_ha-sh",VAL)
-    
-    lapply(names(ls_vop_ha_sh_cell),FUN=function(Layer){
-        suppressWarnings(terra::writeRaster(ls_vop_ha_sh_cell[[Layer]],file=paste0(LivestockDirInt,"/",Layer,"-cell.tif"),overwrite=T))    
-        })
+    lapply(1:terra::nlyr(ls_vop_ha_sh_cell),FUN=function(j){
+        suppressWarnings(
+            terra::writeRaster(ls_vop_ha_sh_cell[[j]],
+                               file=paste0(LivestockDirInt_cell,"/",names(ls_vop_ha_sh_cell)[j],".tif"),
+                               overwrite=T))
+        suppressWarnings(
+            terra::writeRaster(LivestockVoP_SH[[j]],
+                               file=paste0(LivestockDirInt_total,"/",names(LivestockVoP_SH)[j],".tif"),
+                               overwrite=T))   
+    })
     
     VAL
     

@@ -11,7 +11,7 @@ if(!dir.exists(IntDir)){
     }
 
 
-Countries<-c('AGO','BDI','BEN','BFA','BWA','CAF','CIV','CMR','COD','COG','DJI','ERI','ETH','GAB','GHA','GIN','GMB','GNB','GNQ','KEN','LBR','LSO','MDG','MLI','MOZ','MRT','MWI','NAM','NER','NGA','RWA','SEN','SLE','SOM','SSD','SWZ','TCD','TGO','TZA','UGA','ZAF','ZMB','ZWE')
+Countries<-c('AGO','BDI','BEN','BFA','BWA','CAF','CIV','CMR','COD','COG','DJI','ERI','ETH','GAB','GHA','GIN','GMB','GNB','GNQ','KEN','LBR','LSO','MDG','MLI','MOZ','MRT','MWI','NAM','NER','NGA','RWA','SEN','SLE','SOM','SDN','SSD','SWZ','TCD','TGO','TZA','UGA','ZAF','ZMB','ZWE')
 
 options(timeout=480)
 
@@ -41,4 +41,13 @@ admin1<-lapply(1:length(Countries),FUN=function(i){
 
 admin1<-do.call(rbind,admin1)
 
-terra::writeVector(admin1,file=paste0(IntDir,"/gadm41_ssa_1.shp"))
+# Fix Ghana issue with HASC_1 codes
+admin1$HASC_1[admin1$GID_0=="GHA"]<-gsub("-",".",admin1$ISO_1[admin1$GID_0=="GHA"])
+
+# Fix Guinea issue with HASC_1 codes
+admin1$HASC_1[admin1$GID_0=="GIN"]<-c('GN.BO','GN.CO','GN.FA','GN.KA','GN.KI','GN.LA','GN.MA','GN.NZ')
+
+# Fix Madagascar issue with HASC_1 codes
+admin1$HASC_1[admin1$GID_0=="MDG"]<-c('MG.AV','MG.AS','MG.FI','MG.MA','MG.TM','MG.TL')
+
+terra::writeVector(admin1,file=paste0(IntDir,"/gadm41_ssa_1.shp"),overwrite=T)

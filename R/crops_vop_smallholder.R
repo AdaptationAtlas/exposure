@@ -92,3 +92,4 @@ lapply(Values,FUN=function(VAL){
     })
 
 terra::plot(terra::rast(list.files(CropDirInt,"total",full.names=T)[1:2]))
+
