@@ -1,5 +1,4 @@
 # Intersect livestock VoP with smallholder size classes
-require(future.apply)
 require(terra)
 
 # Set data directory
@@ -24,7 +23,7 @@ water_mask<-terra::mask(terra::crop(water_mask,adm1_africa),adm1_africa)
 # Set directory for livestock data
 LivestockDir<-paste0(DataDir,"/atlas_livestock/raw")
 # Set save directory for livestock x smallholder data
-LivestockDirInt_cell<-paste0(DataDir,"/atlas_livestock/intermediate/vop_per_cell_ha")
+LivestockDirInt_cell<-paste0(DataDir,"/atlas_livestock/intermediate/vop_per_cell_km")
 if(!dir.exists(LivestockDirInt_cell)){
     dir.create(LivestockDirInt_cell,recursive=T)
     }
@@ -50,38 +49,38 @@ LivestockVoP<-LivestockVoP[[c("cattle","chicken","sheep_goat","pig","total")]]
 SmallHolders<-terra::rast(paste0(DataDir,"/atlas_smallholders/raw/farmSize_agarea_20210505_1.tif"))
 SmallHolders<-terra::project(SmallHolders,crs(base_raster))
 SmallHolders<-terra::mask(terra::crop(SmallHolders,adm1_africa),adm1_africa)
-SmallHolders<-terra::resample(SH_Tot,base_raster,method="near")
+SmallHolders<-terra::resample(SmallHolders,base_raster,method="near")
 
 # Create vector of smallholder size classes
 Values<-c(1,2,5,10,20,999999999)
 names(Values)<-paste0("h",2:7)
 
 # Work out pixel cell size
-cellsize_ha<-terra::cellSize(LivestockVoP[[1]],unit="ha",mask=F)
+cellsize_ha<-terra::cellSize(LivestockVoP[[1]],unit="km",mask=F)
 
 # Create a higher resolution raster to work out area of waterbody per pixel
-cellsize_da<-terra::disagg(cellsize_ha,fact=10)
-water_rast<-terra::rasterize(waterbodies,cellsize_da)
+#cellsize_da<-terra::disagg(cellsize_ha,fact=10)
+#water_rast<-terra::rasterize(waterbodies,cellsize_da)
 
 # Work out proportion of cell that is not water and multiply cellsize_ha by this value
-water_rast<-(100-terra::aggregate(water_rast,fact=10,fun=sum,na.rm=T))/100
-water_rast[is.na(water_rast)]<-1
-cellsize_ha<-cellsize_ha*water_rast
+#water_rast<-(100-terra::aggregate(water_rast,fact=10,fun=sum,na.rm=T))/100
+#water_rast[is.na(water_rast)]<-1
+#cellsize_ha<-cellsize_ha*water_rast
 
 # Create mask for each smallholder value, multiply LSVop stack by mask and save each layer
 
 LS<-lapply(1:length(Values),FUN=function(i){
     VAL<-Values[i]
     SH<-SmallHolders
+    SH[!is.na(SH) & SH<=VAL]<-1
     SH[SH>VAL]<-0
-    SH[!is.na(SH)]<-1
         
     LivestockVoP_SH<-LivestockVoP*SH
     
     ls_vop_ha_sh_cell<-LivestockVoP_SH/cellsize_ha
        
-    names(ls_vop_ha_sh_cell)<- paste0(names(Values)[i],"-",names(ls_vop_ha_sh_cell),"-vop_per_cell_ha")
-    names(LivestockVoP_SH)<- paste0(names(Values)[i],"-",names(ls_vop_ha_sh_cell),"-vop_total")
+    names(ls_vop_ha_sh_cell)<- paste0(names(Values)[i],"-",names(LivestockVoP),"-vop_per_cell_km")
+    names(LivestockVoP_SH)<- paste0(names(Values)[i],"-",names(LivestockVoP),"-vop_total")
     
     lapply(1:terra::nlyr(ls_vop_ha_sh_cell),FUN=function(j){
         suppressWarnings(
@@ -94,6 +93,10 @@ LS<-lapply(1:length(Values),FUN=function(i){
                                overwrite=T))   
     })
     
-    VAL
+    list(LivestockVoP_SH=LivestockVoP_SH,ls_vop_ha_sh_cell=ls_vop_ha_sh_cell)
+    
+
     
     })
+
+names(LS)<-Values

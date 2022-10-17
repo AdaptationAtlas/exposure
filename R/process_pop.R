@@ -36,22 +36,29 @@ pop<-terra::resample(pop,base_raster,method="near")
 pop<-terra::mask(terra::crop(pop,adm1_africa),adm1_africa)*water_mask
 names(pop)<-c("rural","total","urban")
 
-cellsize_ha<-terra::cellSize(pop[[1]],unit="ha")
+cellsize_ha<-terra::cellSize(pop[[1]],unit="km")
 
-# Create a higher resolution raster to work out area of waterbody per pixel
-cellsize_da<-terra::disagg(cellsize_ha,fact=10)
-water_rast<-terra::rasterize(waterbodies,cellsize_da)
+# Calculate population per land area
+pop_sh_density<-pop/cellsize_ha
 
-# Work out proportion of cell that is not water and multiply cellsize_ha by this value
-water_rast<-(100-terra::aggregate(water_rast,fact=10,fun=sum,na.rm=T))/100
-water_rast[is.na(water_rast)]<-1
-cellsize_ha<-cellsize_ha*water_rast
+lapply(1:terra::nlyr(pop_sh_density),FUN=function(j){
+      
+    suppressWarnings(
+        terra::writeRaster(pop_sh_density[[j]],
+                           file=paste0(DataDirInt_cell,"/total-",names(pop_sh_density)[j],"-pop_density.tif"),
+                           overwrite=T))
+    suppressWarnings(
+        terra::writeRaster(pop[[j]],
+                           file=paste0(DataDirInt_total,"/total-",names(pop)[j],".tif"),
+                           overwrite=T))   
+})
+
 
 # Load, mask, and resample smallholder data
 SmallHolders<-terra::rast(paste0(DataDir,"/atlas_smallholders/raw/farmSize_agarea_20210505_1.tif"))
 SmallHolders<-terra::project(SmallHolders,crs(base_raster))
 SmallHolders<-terra::mask(terra::crop(SmallHolders,adm1_africa),adm1_africa)
-SmallHolders<-terra::resample(SH_Tot,base_raster,method="near")
+SmallHolders<-terra::resample(SmallHolders,base_raster,method="near")
 
 # Create vector of smallholder size classes
 Values<-c(1,2,5,10,20,999999999)
@@ -89,5 +96,5 @@ PopList<-lapply(1:length(Values),FUN=function(i){
 
 names(PopList)<-names(Values)
 
-terra::plot(PopList$h2$pop_density)
+terra::plot(PopList$h2$pop_sh_density)
 

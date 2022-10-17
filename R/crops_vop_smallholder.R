@@ -23,8 +23,8 @@ MS_metadata<-data.table::fread(paste0(CropDir,"/mapspam_meta.csv"))
 
 # Create a list of crop groupings
 cereals<-c("barley","maize","other cereals","pearl millet","rice","small millet","sorghum","wheat")
-oil_crops<-c("oilpalm","other oil crops","rapeseed","sesameseed","sunflower","coconut")
-pulses<-c("bean","chickpea","cowpea","groundnut","lentil","other pulses","pigeonpea","soybean")
+oil_crops<-c("oilpalm","other oil crops","rapeseed","sesameseed","sunflower","coconut","groundnut","soybean")
+pulses<-c("bean","chickpea","cowpea","lentil","other pulses","pigeonpea")
 roots<-c("cassava","other roots","potato","sweet potato","yams")
 total<-MS_metadata[,unique(Commodity)]
 
@@ -52,15 +52,17 @@ crop_vop_ha<-lapply(1:length(crop_groups),FUN=function(i){
     crop_vop<-sum(crop_vop)
     crop_vop_ha<-crop_vop/cellsize_ha
        
-    names(crop_vop_ha)<-paste0(names(crop_groups)[i],"-USD_ha")
-    names(crop_vop_ha2)<-paste0(names(crop_groups)[i],"-USD_ha")
+    names(crop_vop_ha)<-names(crop_groups)[i]
+    names(crop_vop_ha2)<-names(crop_groups)[i]
+    names(crop_vop)<-names(crop_groups)[i]
     
-    list(crop_vop_ha_cell=crop_vop_ha,crop_vop_ha_crop=crop_vop_ha2)
+    list(crop_vop_ha_cell=crop_vop_ha,crop_vop_ha_crop=crop_vop_ha2,crop_vop=crop_vop)
     
     })
 
 crop_vop_ha_cell<-terra::rast(lapply(crop_vop_ha,"[[","crop_vop_ha_cell"))
 crop_vop_ha_crop<-terra::rast(lapply(crop_vop_ha,"[[","crop_vop_ha_crop"))
+crop_vop<-terra::rast(lapply(crop_vop_ha,"[[","crop_vop"))
 
 # Subset VoP for different smallholder farm sizes ####
 
@@ -70,26 +72,50 @@ SmallHolders<-terra::resample(SmallHolders,crop_vop_ha_cell,method="near")
 SmallHolders<-terra::mask(terra::crop(SmallHolders,sh_africa),sh_africa)
 
 # Create vector of smallholder values
-Values<-unique(terra::values(SmallHolders))
-Values<-sort(Values[!is.na(Values)])
+Values<-c(1,2,5,10,20,9999999)
+ValNames<-paste0("h",c(2,3,4,5,6,7))
+
+# Create Save Directories
+IFPRIDirInt_ep<-paste0(DataDir,"/atlas_mapspam/intermediate/vop_per_harv_area")
+if(!dir.exists(IFPRIDirInt_ep)){
+    dir.create(IFPRIDirInt_ep,recursive=T)
+    }
+
+IFPRIDirInt_cell<-paste0(DataDir,"/atlas_mapspam/intermediate/vop_per_cell_area")
+if(!dir.exists(IFPRIDirInt_cell)){
+    dir.create(IFPRIDirInt_cell,recursive=T)
+    }
+
+IFPRIDirInt_total<-paste0(DataDir,"/atlas_mapspam/intermediate/vop_total")
+if(!dir.exists(IFPRIDirInt_total)){
+    dir.create(IFPRIDirInt_total,recursive=T)
+    }
 
 # Create mask for each smallholder value, multiply CropVop stack by mask and save each layer
-lapply(Values,FUN=function(VAL){
+Y<-lapply(1:length(Values),FUN=function(j){
+    
+    VAL<-Values[j]
     SH<-SmallHolders
     SH[SH>VAL]<-NA
     SH[!is.na(SH)]<-1
     crop_vop_ha_sh_cell<-crop_vop_ha_cell*SH
     crop_vop_ha_sh_crop<-crop_vop_ha_crop*SH
     
-    names(crop_vop_ha_sh_cell)<- paste0(names(crop_vop_ha_sh_cell),"-sh",VAL)
-    names(crop_vop_ha_sh_crop)<- paste0(names(crop_vop_ha_sh_crop),"-sh",VAL)
+  
+    names(crop_vop)<- paste0(names(crop_vop),"-",ValNames[j],"-IND_total")
+    names(crop_vop_ha_sh_cell)<- paste0(names(crop_vop_ha_sh_cell),"-",ValNames[j],"-IND_cell")
+    names(crop_vop_ha_sh_crop)<- paste0(names(crop_vop_ha_sh_crop),"-",ValNames[j],"-IND_ha")
     
-    lapply(names(crop_vop_ha_sh_cell),FUN=function(Layer){
-       suppressWarnings(terra::writeRaster(crop_vop_ha_sh_cell[[Layer]],file=paste0(CropDirInt,"/",Layer,"-cell.tif"),overwrite=T))        
-       suppressWarnings(terra::writeRaster(crop_vop_ha_sh_crop[[Layer]],file=paste0(CropDirInt,"/",Layer,"-crop.tif"),overwrite=T)) 
+    X<-lapply(1:terra::nlyr(crop_vop_ha_sh_cell),FUN=function(i){
+        
+       suppressWarnings(terra::writeRaster(crop_vop[[i]],file=paste0(IFPRIDirInt_total,"/",names(crop_vop)[i],"-cell.tif"),overwrite=T))        
+       suppressWarnings(terra::writeRaster(crop_vop_ha_sh_cell[[i]],file=paste0(IFPRIDirInt_cell,"/",names(crop_vop_ha_sh_cell)[i],"-cell.tif"),overwrite=T))        
+       suppressWarnings(terra::writeRaster(crop_vop_ha_sh_crop[[i]],file=paste0(IFPRIDirInt_ep,"/",names(crop_vop_ha_sh_crop)[i],"-crop.tif"),overwrite=T)) 
         })
-    VAL
+    X
     })
+
+names(Y)<-ValNames
 
 terra::plot(terra::rast(list.files(CropDirInt,"total",full.names=T)[1:2]))
 
