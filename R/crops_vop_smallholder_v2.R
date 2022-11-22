@@ -1,6 +1,7 @@
 # Subset mapspam VoP data to cumulative farm size and caculate VoP per: 1) cell (total VoP); 2) per harvested area of crop(s) = economic yield per ha of crop; and 3) per cell area (less water bodies) = VoP per ha of terrestrial land in cell.
 
 require(terra)
+require(foreign)
 
 # Set data directory
 DataDir<-"/home/jovyan/common_data"
@@ -33,29 +34,28 @@ water_mask<-terra::mask(terra::crop(water_mask,adm1_africa),adm1_africa)
 #cellsize_ha<-cellsize_ha*water_rast
 
 # Set directory for atlas IFPRI mapspam data by farm size
-SpamDir<-paste0(DataDir,"/atlas_mapspam/intermediate/v3")
+SpamDir<-paste0(DataDir,"/atlas_mapspam/intermediate/data_v4")
 
-IFPRIDirInt_ep<-paste0(DataDir,"/atlas_mapspam/intermediate/vop_per_harv_area_v3")
+IFPRIDirInt_ep<-paste0(DataDir,"/atlas_mapspam/intermediate/vop_per_harv_area_v4")
 if(!dir.exists(IFPRIDirInt_ep)){
     dir.create(IFPRIDirInt_ep,recursive=T)
     }
 
-IFPRIDirInt_cell<-paste0(DataDir,"/atlas_mapspam/intermediate/vop_per_cell_area_v3")
+IFPRIDirInt_cell<-paste0(DataDir,"/atlas_mapspam/intermediate/vop_per_cell_area_v4")
 if(!dir.exists(IFPRIDirInt_cell)){
     dir.create(IFPRIDirInt_cell,recursive=T)
     }
 
-IFPRIDirInt_total<-paste0(DataDir,"/atlas_mapspam/intermediate/vop_total_v3")
+IFPRIDirInt_total<-paste0(DataDir,"/atlas_mapspam/intermediate/vop_total_v4")
 if(!dir.exists(IFPRIDirInt_total)){
     dir.create(IFPRIDirInt_total,recursive=T)
     }
 
-require(foreign)
-Vop_Files<-list.files(SpamDir,"_vvsh_",full.names=T)
+Vop_Files<-list.files(SpamDir,"_V_",full.names=T)
 Vop_Files<-grep("_cum",Vop_Files,value=T)
 Vop_Files<-grep(".DBF",Vop_Files,value=T)
 
-HA_Files<-list.files(SpamDir,"_hvsh_",full.names=T)
+HA_Files<-list.files(SpamDir,"_H_",full.names=T)
 HA_Files<-grep("_cum",HA_Files,value=T)
 HA_Files<-grep(".DBF",HA_Files,value=T)
 
@@ -63,7 +63,8 @@ for(i in 1:length(Vop_Files)){
     Vop_data<-suppressWarnings(read.dbf(Vop_Files[i], as.is = T))
     HA_data<-suppressWarnings(read.dbf(HA_Files[i], as.is = T))
     
-    Cols<-paste0(crop_groups,"_A")
+    Cols<-grep("_A",colnames(Vop_data),value=T)
+    Cols<-Cols[!grepl("NAME_",Cols)]
     
     FS<-paste0("h",i+1)
 
@@ -99,3 +100,52 @@ for(i in 1:length(Vop_Files)){
         }
 
 }
+
+# Validation: Check bar plots
+
+# Total VoP
+focal_crop<-"BANPL"
+
+tot_vop_files<-list.files(IFPRIDirInt_total,focal_crop,full.names=T)
+
+tot_vop_Stack<-terra::rast(tot_vop_files)
+
+Angola<-adm1_africa[adm1_africa$COUNTRY=="Angola"]
+
+tot_vop_Stack<-terra::mask(terra::crop(tot_vop_Stack,Angola),Angola)
+
+vals<-unlist(lapply(1:terra::nlyr(tot_vop_Stack),FUN=function(i){
+    sum(values(tot_vop_Stack[[i]]),na.rm=T)
+}))
+
+vals<-data.frame(Size=paste0("h",2:7),VoP=vals,Crop=focal_crop)
+
+require(ggplot2)
+
+ggplot(vals, aes(fill=Size, y=VoP, x=Crop)) + 
+  geom_bar(position="stack", stat="identity")+
+  coord_flip()
+
+# Mean VoP/ha
+focal_crop<-"BANPL"
+
+tot_vop_files<-list.files(IFPRIDirInt_ep,focal_crop,full.names=T)
+
+tot_vop_Stack<-terra::rast(tot_vop_files)
+
+Angola<-adm1_africa[adm1_africa$COUNTRY=="Angola"]
+
+tot_vop_Stack<-terra::mask(terra::crop(tot_vop_Stack,Angola),Angola)
+
+vals<-unlist(lapply(1:terra::nlyr(tot_vop_Stack),FUN=function(i){
+  mean(values(tot_vop_Stack[[i]]),na.rm=T)
+}))
+
+vals<-data.frame(Size=paste0("h",2:7),VoP=vals,Crop=focal_crop)
+
+
+ggplot(vals, aes(fill=Size, y=VoP, x=Crop)) + 
+  geom_bar(position="dodge", stat="identity")+
+  coord_flip()
+
+
