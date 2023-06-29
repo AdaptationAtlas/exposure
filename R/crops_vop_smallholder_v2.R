@@ -38,18 +38,33 @@ SpamDir<-paste0(DataDir,"/atlas_mapspam/intermediate/data_v4")
 
 IFPRIDirInt_ep<-paste0(DataDir,"/atlas_mapspam/intermediate/vop_per_harv_area_v4")
 if(!dir.exists(IFPRIDirInt_ep)){
-    dir.create(IFPRIDirInt_ep,recursive=T)
-    }
+  dir.create(IFPRIDirInt_ep,recursive=T)
+}
 
 IFPRIDirInt_cell<-paste0(DataDir,"/atlas_mapspam/intermediate/vop_per_cell_area_v4")
 if(!dir.exists(IFPRIDirInt_cell)){
-    dir.create(IFPRIDirInt_cell,recursive=T)
-    }
+  dir.create(IFPRIDirInt_cell,recursive=T)
+}
 
 IFPRIDirInt_total<-paste0(DataDir,"/atlas_mapspam/intermediate/vop_total_v4")
 if(!dir.exists(IFPRIDirInt_total)){
-    dir.create(IFPRIDirInt_total,recursive=T)
-    }
+  dir.create(IFPRIDirInt_total,recursive=T)
+}
+
+IFPRIDirInt_ha<-paste0(DataDir,"/atlas_mapspam/intermediate/harvested_area_v4")
+if(!dir.exists(IFPRIDirInt_ha)){
+  dir.create(IFPRIDirInt_ha,recursive=T)
+}
+
+IFPRIDirInt_yield<-paste0(DataDir,"/atlas_mapspam/intermediate/yield_v4")
+if(!dir.exists(IFPRIDirInt_yield)){
+  dir.create(IFPRIDirInt_yield,recursive=T)
+}
+
+IFPRIDirInt_prod<-paste0(DataDir,"/atlas_mapspam/intermediate/production_v4")
+if(!dir.exists(IFPRIDirInt_prod)){
+  dir.create(IFPRIDirInt_prod,recursive=T)
+}
 
 Vop_Files<-list.files(SpamDir,"_V_",full.names=T)
 Vop_Files<-grep("_cum",Vop_Files,value=T)
@@ -59,52 +74,72 @@ HA_Files<-list.files(SpamDir,"_H_",full.names=T)
 HA_Files<-grep("_cum",HA_Files,value=T)
 HA_Files<-grep(".DBF",HA_Files,value=T)
 
+Y_Files<-list.files(SpamDir,"_Y_",full.names=T)
+Y_Files<-grep("_cum",HA_Files,value=T)
+Y_Files<-grep(".DBF",HA_Files,value=T)
+
+
 for(i in 1:length(Vop_Files)){
-    Vop_data<-suppressWarnings(read.dbf(Vop_Files[i], as.is = T))
-    HA_data<-suppressWarnings(read.dbf(HA_Files[i], as.is = T))
+  Vop_data<-suppressWarnings(read.dbf(Vop_Files[i], as.is = T))
+  HA_data<-suppressWarnings(read.dbf(HA_Files[i], as.is = T))
+  Yield_data<-suppressWarnings(read.dbf(Y_Files[i], as.is = T))
+  
+  Cols<-grep("_A",colnames(Vop_data),value=T)
+  Cols<-Cols[!grepl("NAME_",Cols)]
+  
+  FS<-paste0("h",i+1)
+  
+  for(j in 1:length(Cols)){
+    # Display progress
+    cat('\r                                                                                                                                          ')
+    cat('\r',paste0(Vop_Files[i],"-",Cols[j]))
+    flush.console()
     
-    Cols<-grep("_A",colnames(Vop_data),value=T)
-    Cols<-Cols[!grepl("NAME_",Cols)]
+    crop_ha<-terra::rast(HA_data[,c("X","Y",Cols[j])],crs=crs(water_mask))
+    crop_vop<-terra::rast(Vop_data[,c("X","Y",Cols[j])],crs=crs(water_mask))
+    crop_yield<-terra::rast(Yield_data[,c("X","Y",Cols[j])],crs=crs(water_mask))
     
-    FS<-paste0("h",i+1)
-
-    for(j in 1:length(Cols)){
-        
-        crop_ha<-terra::rast(HA_data[,c("X","Y",Cols[j])],crs=crs(water_mask))
-        crop_vop<-terra::rast(Vop_data[,c("X","Y",Cols[j])],crs=crs(water_mask))
-        
-        crop_ha<-terra::resample(crop_ha,water_mask,method="near")
-        crop_vop<-terra::resample(crop_vop,water_mask,method="near")
-        
-        crop_vop<-terra::mask(terra::crop(crop_vop,adm1_africa),adm1_africa)*water_mask
-        crop_ha<-terra::mask(terra::crop(crop_ha,adm1_africa),adm1_africa)*water_mask
-      
-        crop_vop_ha<-crop_vop/crop_ha
-        crop_vop_ha[is.infinite(crop_vop_ha)]<-NA
-        crop_vop_cell<-crop_vop/cellsize_ha
-        
-        CROP<-gsub("_A","",names(crop_vop_ha))
-        
-        names(crop_vop)<-paste0(CROP,"-",FS,"-IND_total")
-        names(crop_vop_ha)<-paste0(CROP,"-",FS,"-IND_ha")
-        names(crop_vop_cell)<-paste0(CROP,"-",FS,"-IND_cell")
-        
-        suppressWarnings(terra::writeRaster(crop_vop,file=paste0(IFPRIDirInt_total,"/",FS,"-",CROP,"-vop.tif"), overwrite=T))       
-        
-        suppressWarnings(terra::writeRaster(crop_vop_ha,file=paste0(IFPRIDirInt_ep,"/",FS,"-",CROP,"-vop_per_harv_ha.tif"),overwrite=T))
-        
-        suppressWarnings(terra::writeRaster(crop_vop_cell,file=paste0(IFPRIDirInt_cell,"/",FS,"-",CROP,"-vop_per_cell_ha.tif"),overwrite=T))
-        
-        list(crop_vop=crop_vop, crop_vop_ha=crop_vop_ha,crop_vop_cell=crop_vop_cell)
-        
-        }
-
+    
+    crop_ha<-terra::resample(crop_ha,water_mask,method="near")
+    crop_vop<-terra::resample(crop_vop,water_mask,method="near")
+    crop_yield<-terra::resample(crop_yield,water_mask,method="near")
+    
+    crop_vop<-terra::mask(terra::crop(crop_vop,adm1_africa),adm1_africa)*water_mask
+    crop_ha<-terra::mask(terra::crop(crop_ha,adm1_africa),adm1_africa)*water_mask
+    crop_yield<-terra::mask(terra::crop(crop_yield,adm1_africa),adm1_africa)*water_mask
+    
+    crop_production<-crop_yield*crop_ha
+    
+    crop_vop_ha<-crop_vop/crop_ha
+    crop_vop_ha[is.infinite(crop_vop_ha)]<-NA
+    crop_vop_cell<-crop_vop/cellsize_ha
+    
+    CROP<-gsub("_A","",names(crop_vop_ha))
+    
+    names(crop_production)<-paste0(CROP,"-",FS,"-tons")
+    names(crop_yield)<-paste0(CROP,"-",FS,"-ton_ha")
+    names(crop_ha)<-paste0(CROP,"-",FS,"-ha")
+    names(crop_vop)<-paste0(CROP,"-",FS,"-IND_total")
+    names(crop_vop_ha)<-paste0(CROP,"-",FS,"-IND_ha")
+    names(crop_vop_cell)<-paste0(CROP,"-",FS,"-IND_cell")
+    
+    suppressWarnings(terra::writeRaster(crop_production,file=paste0(IFPRIDirInt_prod,"/",FS,"-",CROP,"-prod.tif"), overwrite=T))       
+    suppressWarnings(terra::writeRaster(crop_yield,file=paste0(IFPRIDirInt_yield,"/",FS,"-",CROP,"-yield.tif"), overwrite=T))       
+    suppressWarnings(terra::writeRaster(crop_ha,file=paste0(IFPRIDirInt_ha,"/",FS,"-",CROP,"-harv_area.tif"), overwrite=T))       
+    suppressWarnings(terra::writeRaster(crop_vop,file=paste0(IFPRIDirInt_total,"/",FS,"-",CROP,"-vop.tif"), overwrite=T))       
+    suppressWarnings(terra::writeRaster(crop_vop_ha,file=paste0(IFPRIDirInt_ep,"/",FS,"-",CROP,"-vop_per_harv_ha.tif"),overwrite=T))
+    suppressWarnings(terra::writeRaster(crop_vop_cell,file=paste0(IFPRIDirInt_cell,"/",FS,"-",CROP,"-vop_per_cell_ha.tif"),overwrite=T))
+    
+    list(crop_vop=crop_vop, crop_vop_ha=crop_vop_ha,crop_vop_cell=crop_vop_cell)
+    
+  }
+  
 }
 
 # Validation: Check bar plots
 
 # Total VoP
-focal_crop<-"BANPL"
+focal_crop<-"CER"
 
 tot_vop_files<-list.files(IFPRIDirInt_total,focal_crop,full.names=T)
 
@@ -115,7 +150,7 @@ Angola<-adm1_africa[adm1_africa$COUNTRY=="Angola"]
 tot_vop_Stack<-terra::mask(terra::crop(tot_vop_Stack,Angola),Angola)
 
 vals<-unlist(lapply(1:terra::nlyr(tot_vop_Stack),FUN=function(i){
-    sum(values(tot_vop_Stack[[i]]),na.rm=T)
+  sum(values(tot_vop_Stack[[i]]),na.rm=T)
 }))
 
 vals<-data.frame(Size=paste0("h",2:7),VoP=vals,Crop=focal_crop)
