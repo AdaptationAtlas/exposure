@@ -84,9 +84,10 @@ for(i in 1:length(Vop_Files)){
   HA_data<-suppressWarnings(foreign::read.dbf(HA_Files[i], as.is = T))
   Yield_data<-suppressWarnings(foreign::read.dbf(Y_Files[i], as.is = T))
   
-  Vop_data[HA_data$CELL5M==4966310, "MAIZ_A"]
-  HA_data[HA_data$CELL5M==4966310, "MAIZ_A"]
-  Yield_data[Yield_data$CELL5M==4966310, "MAIZ_A"]
+  # Check values
+  #Vop_data[HA_data$CELL5M==4966310, "MAIZ_A"]
+  #HA_data[HA_data$CELL5M==4966310, "MAIZ_A"]
+  #Yield_data[Yield_data$CELL5M==4966310, "MAIZ_A"]
   
   Cols<-grep("_A",colnames(Vop_data),value=T)
   Cols<-Cols[!grepl("NAME_",Cols)]
